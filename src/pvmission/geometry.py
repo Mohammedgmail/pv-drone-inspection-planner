@@ -124,6 +124,10 @@ def _static(
     gsd_along = camera.gsd(R)
     gsd_eff = gsd_along / np.clip(cos_view, 1e-6, None)
     occl = _occluded(P, Cb, list(neighbours)) if neighbours else np.zeros_like(in_fov)
+    for j, r in enumerate(rows):  # rows of the same pass can hide each other too
+        others = ridx != j
+        if len(rows) > 1 and others.any():
+            occl[:, others] |= _occluded(P[:, others], Cb, [r])
     lo, hi = req.view_angle_deg
     ok = (cos_view > 0) & (view >= lo) & (view <= hi) & in_fov & (gsd_eff <= req.max_gsd_m) & ~occl
     pitch = np.degrees(np.arcsin(o[:, 2]))

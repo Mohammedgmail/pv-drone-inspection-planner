@@ -48,75 +48,104 @@ def sun_at(t):
 
 
 def cross_section(morning, noon):
-    """Side view (looking west): rows, the noon sun, its reflection and both placements."""
+    """Side view (looking west) of one pair of rows at 13:07 and three camera placements."""
+    from pvmission.geometry import _occluded
+
     t = pd.Timestamp(f"{DATE} 13:07", tz=PLANT.timezone)
     s, sp = sun_at(t)
-    m_line, n_line = morning.lines[4], noon.lines[2]
-    rows = [PLANT.rows[i] for i in n_line.rows]
-    centre = np.mean([r.center for r in rows], axis=0)
+    m_line = morning.lines[4]
+    pair = [PLANT.rows[i] for i in m_line.rows]
+    centre = np.mean([r.center for r in pair], axis=0)
+    others = [r for r in PLANT.rows if r not in pair]
     f = np.array([0.0, -1.0, 0.0])  # facing direction (south) -> plot x to the right
+    n_line = next(ln for ln in noon.lines if ln.rows == [pair[0].index])
 
     def xz(p):
         return float((p - centre) @ f), float(p[2])
 
-    fig, ax = plt.subplots(figsize=(8.6, 5.6), facecolor=SURFACE)
+    fig, ax = plt.subplots(figsize=(9.0, 5.8), facecolor=SURFACE)
     style(ax)
     ax.grid(False)
-    for r in PLANT.rows[n_line.rows[0] - 2 : n_line.rows[-1] + 3]:
+    for r in PLANT.rows[pair[0].index - 2 : pair[-1].index + 3]:
         lo, hi = r.point(0, -r.width / 2), r.point(0, r.width / 2)
-        covered = r.index in n_line.rows
         ax.plot(
             *zip(xz(lo), xz(hi), strict=True),
-            color=INK if covered else "#b5b3ad",
-            lw=4 if covered else 3,
+            color=INK if r in pair else "#b5b3ad",
+            lw=4 if r in pair else 3,
             solid_capstyle="butt",
         )
     ax.axhline(0, color=INK_2, lw=1)
     refl = sunmod.reflection(s, PLANT.rows[0].normal)
-    points = [r.point(0.0, t) for r in rows for t in (-r.width / 2, 0.0, r.width / 2)]
     sx, sz = float(s @ f), float(s[2])
     rx, rz = float(refl @ f), float(refl[2])
     elev = sp.apparent_elevation.iloc[0]
-    for k, (line, colour, name) in enumerate(
-        ((m_line, ORANGE, "morning placement"), (n_line, BLUE, "noon placement"))
-    ):
-        c = line.config
-        cam_rows = [PLANT.rows[i] for i in line.rows]
-        cam = c.position - (np.mean([r.center for r in cam_rows], axis=0) - centre)
-        cx, cz = xz(cam)
-        # the module point where this placement comes closest to the reflection
-        angles = [
+
+    def glare_at(cam, q):
+        return float(
             np.degrees(np.arccos(np.clip((cam - q) @ refl / np.linalg.norm(cam - q), -1, 1)))
-            for q in points
-        ]
-        P = points[int(np.argmin(angles))]
+        )
+
+    def sun_arrows(P):
         px, pz = xz(P)
         ax.annotate(
             "",
             (px, pz),
-            (px + sx * 9, pz + sz * 9),
+            (px + sx * 8, pz + sz * 8),
             arrowprops={"arrowstyle": "-|>", "color": YELLOW, "lw": 2.2},
         )
         ax.annotate(
             "",
-            (px + rx * 22, pz + rz * 22),
+            (px + rx * 20, pz + rz * 20),
             (px, pz),
             arrowprops={"arrowstyle": "-|>", "color": YELLOW, "lw": 2.0, "ls": (0, (4, 3))},
         )
-        ev = evaluate(rows, np.array([c.height]), np.array([c.offset]), s, CAM, REQ)
-        ax.plot([cx, px], [cz, pz], color=colour, lw=1.6)
-        ax.plot(cx, cz, "o", ms=9, color=colour, mec=SURFACE, mew=2)
-        ok = "valid" if ev["valid"][0] else "rejected"
-        dy = 0.8 if k == 0 else -3.4
-        ax.text(
-            cx + 0.8,
-            cz + dy,
-            f"{name}: {c.height:.0f} m up, camera {c.pitch_deg:.0f}°\n"
-            f"worst point: reflection {min(angles):.0f}° from the line of sight ({ok})",
-            color=INK,
-            fontsize=9,
-            va="bottom",
-        )
+
+    def camera(pos, colour, text, dy):
+        cx, cz = xz(pos)
+        ax.plot(cx, cz, "o", ms=9, color=colour, mec=SURFACE, mew=2, zorder=5)
+        ax.text(cx + 0.8, cz + dy, text, color=INK, fontsize=8.8, va="bottom")
+        return cx, cz
+
+    # A: the morning two-row placement, kept until 13:07
+    c = m_line.config
+    cam = c.position
+    pts = [r.point(0.0, t) for r in pair for t in (-r.width / 2, 0.0, r.width / 2)]
+    P = min(pts, key=lambda q: glare_at(cam, q))
+    sun_arrows(P)
+    cx, cz = camera(
+        cam,
+        ORANGE,
+        f"A  morning placement, {c.height:.0f} m up: the reflection is\n"
+        f"{glare_at(cam, P):.0f}° from the line of sight (rejected: glare)",
+        0.8,
+    )
+    ax.plot([cx, xz(P)[0]], [cz, xz(P)[1]], color=ORANGE, lw=1.6)
+    # B: covering both rows from low and in front clears the glare, but row 1 hides row 2
+    cam = centre + np.array([0.0, -19.5, 15.0 - centre[2]])
+    Q = pair[1].point(0.0, -pair[1].width / 2 + 0.05)
+    assert _occluded(Q[None], cam[None], [pair[0]])[0]
+    ev = evaluate(pair, np.array([15.0]), np.array([19.5]), s, CAM, REQ, others)
+    cx, cz = camera(
+        cam,
+        AQUA,
+        f"B  both rows from 15 m up, 19.5 m out: glare {ev['glare'][0]:.0f}° is fine,\n"
+        "but the front row hides the back row's lowest cells (rejected)",
+        0.8,
+    )
+    ax.plot([cx, xz(Q)[0]], [cz, xz(Q)[1]], color=AQUA, lw=1.6, ls=(0, (2, 2)))
+    # C: the planner's choice at noon, one row per pass
+    c = n_line.config
+    cam = c.position
+    pts = [pair[0].point(0.0, t) for t in (-pair[0].width / 2, 0.0, pair[0].width / 2)]
+    P = min(pts, key=lambda q: glare_at(cam, q))
+    cx, cz = camera(
+        cam,
+        BLUE,
+        f"C  chosen: one row per pass, {c.height:.0f} m up, camera {c.pitch_deg:.0f}°,\n"
+        f"reflection {glare_at(cam, P):.0f}° away, nothing hidden",
+        -3.6,
+    )
+    ax.plot([cx, xz(P)[0]], [cz, xz(P)[1]], color=BLUE, lw=1.6)
     from matplotlib.lines import Line2D
 
     handles = [
@@ -129,22 +158,22 @@ def cross_section(morning, noon):
             ls=(0, (4, 3)),
             label="its mirror reflection off the glass",
         ),
-        Line2D([], [], color=INK, lw=4, label="rows covered by this pass"),
+        Line2D([], [], color=INK, lw=4, label="the two rows of a morning pass"),
     ]
     ax.legend(
         handles=handles,
         loc="lower right",
-        bbox_to_anchor=(1.0, 0.04),
+        bbox_to_anchor=(1.0, 0.03),
         frameon=False,
         labelcolor=INK,
         fontsize=9,
     )
-    ax.set_xlim(-10, 36)
+    ax.set_xlim(-10, 40)
     ax.set_ylim(-0.5, 34)
     ax.set_aspect("equal")
     ax.set_xlabel("metres towards the south (the way the modules face)", color=INK_2)
     ax.set_ylabel("height (m)", color=INK_2)
-    title(ax, "21 June, 13:07: the sun's reflection points at the morning camera position", 11)
+    title(ax, "21 June, 13:07: why the noon plan flies one row per pass", 11)
     fig.tight_layout()
     fig.savefig(DOCS / "cross_section.png", dpi=130, facecolor=SURFACE)
     plt.close(fig)
@@ -285,7 +314,7 @@ def sitl_map(noon):
     for r in PLANT.rows:
         c = r.corners()
         ax.fill(c[:, 0], c[:, 1], color="#d9d7d1", lw=0)
-    for ln in noon.lines:
+    for ln in [ln for ln in noon.lines if ln.sortie == summary["sortie"] - 1]:
         ax.plot(
             [ln.start[0], ln.end[0]],
             [ln.start[1], ln.end[1]],
@@ -302,7 +331,9 @@ def sitl_map(noon):
     ax.set_xlabel("east (m)", color=INK_2)
     ax.set_ylabel("north (m)", color=INK_2)
     title(
-        ax, f"Noon plan flown in ArduPilot SITL, {summary['wind_mps'] * 3.6:.0f} km/h crosswind\n"
+        ax,
+        f"Noon plan, battery {summary['sortie']} of {len(noon.sorties)}, flown in ArduPilot SITL "
+        f"with a {summary['wind_mps'] * 3.6:.0f} km/h crosswind\n",
     )
     ax.text(
         0,

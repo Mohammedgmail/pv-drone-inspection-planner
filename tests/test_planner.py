@@ -10,7 +10,11 @@ def test_noon_plan_is_feasible_and_covers_every_row_once(cfg, noon):
     assert noon.feasible, noon.message
     covered = sorted(r for ln in noon.lines for r in ln.rows)
     assert covered == list(range(len(cfg["plant"].rows)))
-    assert noon.rows_per_line == 2
+    assert noon.rows_per_line == 1  # two rows per pass would hide or glare at noon
+
+
+def test_morning_plan_covers_two_rows_per_pass(morning):
+    assert morning.feasible and morning.rows_per_line == 2 and len(morning.sorties) == 1
 
 
 def test_lines_meet_the_requirements(cfg, noon):

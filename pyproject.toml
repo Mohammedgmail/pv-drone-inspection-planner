@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pvmission"
-version = "0.1.0"
+version = "0.1.1"
 description = "Physics-based drone mission planning for thermal inspection of solar PV plants: irradiance window, resolution, viewing angle and sun-glare avoidance, exported to ArduPilot and QGroundControl"
 readme = "README.md"
 license = "MIT"

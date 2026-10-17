@@ -30,7 +30,13 @@ VISIT_RADIUS_M = 2.5  # a waypoint counts as visited if the track passes this cl
 
 
 def start_sitl(ardupilot: Path, home, speedup: float, params: dict, workdir: Path):
+    # absolute paths: SITL runs in its own working directory, where a relative path breaks
+    ardupilot = Path(ardupilot).expanduser().resolve()
     binary = ardupilot / "build" / "sitl" / "bin" / "arducopter"
+    if not binary.exists():
+        raise FileNotFoundError(
+            f"{binary} not found: build SITL with ./waf configure --board sitl && ./waf copter"
+        )
     defaults = ardupilot / "Tools" / "autotest" / "default_params" / "copter.parm"
     extra = workdir / "pvmission.parm"  # applied at boot: camera settings need a reboot
     extra.write_text("".join(f"{k} {v}\n" for k, v in params.items()))
@@ -269,6 +275,7 @@ def fly(args) -> dict:
         "turbulence": args.turbulence,
         "waypoints": len(waypoints),
         "waypoints_visited": visited,
+        "lines": len(lines),
         "camera_triggers": len(triggers),
         "planned_images": sum(ln["images"] for ln in lines),
         "modules_with_centred_image_pct": round(100 * covered / modules, 2),

@@ -17,7 +17,7 @@ ArduPilot's simulator.
 ![ArduPilot](https://img.shields.io/badge/ArduPilot-Copter_4.7-4B5563)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
 
-![The sun's reflection at noon and the two camera placements](docs/cross_section.png)
+![The sun's reflection at noon and three camera placements](docs/cross_section.png)
 
 ## Why
 
@@ -49,7 +49,8 @@ flown.
    - the resolution on the module surface is 3 cm/px or finer;
    - the viewing angle is between 5° and 60° from the module normal;
    - the sun's mirror reflection is at least 15° from the line of sight;
-   - the point is inside the image and not hidden by another row.
+   - the point is inside the image and not hidden by another row, including the other rows
+     covered by the same pass.
 
    The planner then picks the fastest valid placement, where speed is limited by motion blur.
 3. **Rows per pass.** One, two or three rows per pass, whichever finishes soonest. In the example
@@ -71,18 +72,18 @@ The example site is a 2.3 MWp fixed-tilt plant in Northumberland, UK, at 55° N:
 thermal (640×512, 12 µm pixels, 13.5 mm lens). All results below are for clear-sky conditions on
 21 June unless stated.
 
-- **The whole plant takes one battery:**
-  - 12 minutes in the morning;
-  - 15 minutes around solar noon;
-  - 10 passes covering two rows each, with 260–320 images.
+- **In the morning the whole plant takes one battery:** 12 minutes, 10 passes covering two
+  rows each, 260 images.
 - **The best camera placement changes through the day:**
-  - at 09:30 it is 30 m up, 7 m in front of the rows, camera at −76°;
-  - at 13:00 it is 15 m up, 19.5 m in front, camera at −34°, with the drone flying sideways and
-    facing the modules.
+  - at 09:30 it is 30 m up, 7 m in front of the rows, camera at −76°, two rows per pass;
+  - at 13:00 it is 21.5 m up, 22.5 m in front of the row, camera at −41°, with the drone flying
+    sideways and facing the modules. Only one row fits per pass: from any placement that keeps
+    the reflection away and covers two rows, the front row hides the bottom of the back row.
 - **Keeping the morning placement at noon would ruin the images.** Between 12:40 and 13:40, the
   sun's reflection comes within 4–5° of the line of sight on the worst image. The re-planned
-  placement keeps it 15° or more away all day. The cost is 25% more flight time around noon,
-  because the passes are lower and slower.
+  placement keeps it 15° or more away all day. The cost is nearly double the flight time around
+  noon (22.7 instead of 12 minutes, two batteries, 500 images), because each pass covers one
+  row.
 - **The inspection season is short this far north.** On a clear day, irradiance on the modules
   stays above 600 W/m² for up to 7.3 hours in June. From November to January it hardly gets
   there at all: at most 0.4 hours in early November, none in December, and at most 1.4 hours
@@ -92,34 +93,35 @@ thermal (640×512, 12 µm pixels, 13.5 mm lens). All results below are for clear
 
 ![Valid clear-sky hours per day through the year](docs/season.png)
 
-| 21 June | Take-off | Height | Offset | Gimbal | Speed | Flight time | Worst glare margin |
-|---|---|--:|--:|--:|--:|--:|--:|
-| Morning plan | 09:32 | 30.5 m | +7.0 m | −76° | 2.5 m/s | 12.0 min | 43° |
-| Noon plan | 13:00 | 15.0 m | +19.5 m | −34° | 1.8 m/s | 15.0 min | 16° |
+| 21 June | Take-off | Rows per pass | Height | Offset | Gimbal | Speed | Flight time | Batteries | Worst glare margin |
+|---|---|--:|--:|--:|--:|--:|--:|--:|--:|
+| Morning plan | 09:32 | 2 | 30.5 m | +7.0 m | −76° | 2.5 m/s | 12.0 min | 1 | 43° |
+| Noon plan | 13:00 | 1 | 21.5 m | +22.5 m | −41° | 2.6 m/s | 22.7 min | 2 | 16° |
 
-Offset is the horizontal distance from the centre of the two rows, measured towards the side the
-modules face. Speed is the fastest that keeps motion blur within one pixel, assuming a typical
+Offset is the horizontal distance from the centre of the covered rows, measured towards the side
+the modules face. Speed is the fastest that keeps motion blur within one pixel, assuming a typical
 10 ms microbolometer time constant.
 
 ## Checked in ArduPilot's simulator
 
-I flew the noon mission in ArduCopter 4.7.2 software-in-the-loop (SITL) using
-[`sitl/fly_sitl.py`](sitl/fly_sitl.py): once in calm air, and once in a 22 km/h crosswind with
-turbulence.
+I flew the first battery of the noon mission (18 of the 20 passes) in ArduCopter 4.7.2
+software-in-the-loop (SITL) using [`sitl/fly_sitl.py`](sitl/fly_sitl.py): once in calm air, and
+once in a 22 km/h crosswind with turbulence.
 
 | | Calm | 22 km/h crosswind + turbulence |
 |---|--:|--:|
-| Waypoints visited | 20 / 20 | 20 / 20 |
-| Images triggered by the autopilot, planned 320 | 320 | 320 |
+| Waypoints visited | 36 / 36 | 36 / 36 |
+| Images triggered by the autopilot, planned 450 | 451 | 450 |
 | Modules with an image within half a spacing of them | 100% | 100% |
-| Flight time, planned 14.97 min | 14.98 min | 15.00 min |
-| Heading error on the passes, 95th percentile | 0.02° | 0.2° |
+| Flight time, planned 19.34 min | 18.80 min | 18.82 min |
+| Heading error on the passes, 95th percentile | 0.01° | 0.39° |
 | Distance from the planned line, 95th percentile | 3 cm | 3 cm |
 
 The drone flies each pass sideways, keeping the heading the planner chose. It does that with a
 `CONDITION_YAW` command and `WP_YAW_BEHAVIOR=0`, and SITL confirms the heading holds. The flight
-times agree because the planner uses ArduCopter's own acceleration, jerk, climb, descent and
-landing settings. An early version of the planner ignored them and came out 8% short. A separate
+times agree to within 3% (the plan is slightly conservative) because the planner uses
+ArduCopter's own acceleration, jerk, climb, descent and landing settings. An early version of
+the planner ignored them and came out 8% short. A separate
 [GitHub Actions workflow](.github/workflows/sitl.yml) builds SITL and repeats the crosswind
 flight on every push.
 
@@ -135,7 +137,7 @@ git clone https://github.com/Mohammedgmail/pv-drone-inspection-planner.git
 cd pv-drone-inspection-planner
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                                          # 38 tests, about 10 s
+pytest                                          # 39 tests, about 10 s
 
 python -m pvmission plan examples/northumberland.yaml --date 2026-06-21 --start 13:00 --out mission
 python -m pvmission season examples/northumberland.yaml      # valid hours per month
@@ -181,7 +183,20 @@ python sitl/fly_sitl.py --ardupilot ~/ardupilot --mission mission --wind 6 --win
   not a number from the standard; set `min_glare_deg` to change it.
 - **Line ends.** Each pass extends half an image spacing past the rows, plus ArduCopter's 2 m
   waypoint radius. Triggering stops when the end waypoint counts as reached, and this margin is
-  why the autopilot's 320 images match the plan exactly.
+  why the autopilot's image count matches the plan to within one image per pass.
+
+## Changes in v0.1.1: a bug found by the defect mapper
+
+Version 0.1.0 checked that no *other* row hid the modules of a pass, but not that the rows of
+the same pass could hide each other. At noon in June it chose two rows per pass from 15 m up and
+19.5 m in front: the glare margin was fine, but the front row hid the lowest cells of the back
+row. The companion repo [pv-thermal-defect-mapper](https://github.com/Mohammedgmail/pv-thermal-defect-mapper)
+found this. Its renderer ray-traces every image of the plan and showed parts of modules missing.
+
+Rows of the same pass are now checked against each other. Diagram B above shows the rejected
+placement. The noon plan now flies one row per pass (22.7 min and two batteries instead of
+15 min and one). The morning plan was not affected, because its steep camera sees over the front
+row. A test reproduces the case.
 
 ## Limitations
 
@@ -202,9 +217,9 @@ python sitl/fly_sitl.py --ardupilot ~/ardupilot --mission mission --wind 6 --win
 
 ## Roadmap
 
-- [ ] **Companion repo, `pv-thermal-defect-mapper`:** detect hot spots in the thermal images and
-      use `mission.json` (image poses plus plant layout) to name the exact module behind each
-      defect, giving a defect map and report
+- [x] **Companion repo, [pv-thermal-defect-mapper](https://github.com/Mohammedgmail/pv-thermal-defect-mapper):**
+      finds hot spots in the thermal images and uses `mission.json` (image poses plus plant
+      layout) to name the exact module and cell behind each defect
 - [ ] DJI WPML (KMZ) export for Matrice-series aircraft
 - [ ] Layouts from GeoJSON or OpenStreetMap, single-axis trackers, terrain following
 - [ ] Wind-aware battery model and multi-drone missions

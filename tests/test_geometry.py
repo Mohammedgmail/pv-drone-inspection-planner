@@ -31,7 +31,9 @@ def independent_check(rows, cfg, sun, camera, req, others, n=400, seed=0):
         d = P - C
         assert d @ o > 0
         assert abs(d @ x) / (d @ o) <= tx and abs(d @ y) / (d @ o) <= ty, "outside the image"
-        for other in others:  # nothing in between
+        for other in [*others, *rows]:  # nothing in between, incl. the other row of the pass
+            if other is r:
+                continue
             denom = (C - P) @ other.normal
             k = ((other.center - P) @ other.normal) / denom
             if 0 < k < 1:
@@ -54,9 +56,17 @@ def independent_check(rows, cfg, sun, camera, req, others, n=400, seed=0):
 
 
 @pytest.mark.parametrize(
-    "date_time", ["2026-06-21 13:07", "2026-06-21 09:45", "2026-06-21 16:30", "2026-03-21 12:10"]
+    ("date_time", "k"),
+    [
+        ("2026-06-21 13:07", 1),
+        ("2026-06-21 09:45", 1),
+        ("2026-06-21 09:45", 2),
+        ("2026-06-21 16:30", 1),
+        ("2026-06-21 16:30", 2),
+        ("2026-03-21 12:10", 1),
+        ("2026-03-21 12:10", 2),
+    ],
 )
-@pytest.mark.parametrize("k", [1, 2])
 def test_chosen_placement_meets_every_constraint(cfg, date_time, k):
     plant, camera, req = cfg["plant"], cfg["camera"], cfg["req"]
     import pandas as pd
@@ -117,3 +127,27 @@ def test_no_glare_when_the_sun_is_behind_the_modules(cfg):
         [plant.rows[5]], np.array([30.0]), np.array([0.0]), sun_vector(10, 0), camera, req
     )
     assert ev["glare"][0] == 180.0
+
+
+def test_two_rows_at_june_noon_would_hide_each_other(cfg):
+    """At 13:07 in June no placement covers two rows: glare pushes the camera low and in front,
+    and from there the front row hides the bottom of the back row (found by the defect mapper)."""
+    import pandas as pd
+
+    from pvmission.geometry import _occluded
+
+    plant, camera, req = cfg["plant"], cfg["camera"], cfg["req"]
+    sp = solar_position(
+        plant, pd.DatetimeIndex([pd.Timestamp("2026-06-21 13:07", tz=plant.timezone)])
+    )
+    sun = sun_vector(sp.apparent_elevation.iloc[0], sp.azimuth.iloc[0])
+    front, back = plant.rows[8], plant.rows[9]
+    others = [r for r in plant.rows if r not in (front, back)]
+    assert best_config([front, back], sun, camera, req, others) is None
+    ev = evaluate([front, back], np.array([15.0]), np.array([19.5]), sun, camera, req, others)
+    assert ev["glare"][0] >= req.min_glare_deg and not ev["valid"][0]  # glare fine, still invalid
+    centre = (front.center + back.center) / 2
+    cam = centre + np.array([0.0, -19.5, 15.0 - centre[2]])  # 19.5 m south, 15 m up
+    bottom_of_back = back.point(0.0, -back.width / 2 + 0.05)
+    assert _occluded(bottom_of_back[None], cam[None], [front])[0]
+    assert best_config([front], sun, camera, req, others) is not None  # one row per pass works
