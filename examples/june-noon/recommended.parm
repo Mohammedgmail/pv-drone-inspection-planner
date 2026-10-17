@@ -1,0 +1,2 @@
+# ArduPilot Copter parameters for flying pvmission plans
+WP_YAW_BEHAVIOR 0   # keep the heading set by CONDITION_YAW (the drone flies the lines sideways)

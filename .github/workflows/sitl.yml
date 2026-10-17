@@ -1,0 +1,55 @@
+name: SITL flight test
+
+# Builds ArduCopter SITL, flies the example noon mission in a 22 km/h crosswind and checks
+# waypoints, images, module coverage and flight time against the plan.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  ARDUPILOT_TAG: Copter-4.7.2
+
+jobs:
+  fly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Cache the SITL build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ardupilot
+          key: ardupilot-${{ env.ARDUPILOT_TAG }}-sitl-v1
+      - name: Build ArduCopter SITL
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 -b "$ARDUPILOT_TAG" https://github.com/ArduPilot/ardupilot.git
+          cd ardupilot
+          git submodule update --init --depth 1 modules/waf modules/mavlink modules/lwip \
+            modules/littlefs modules/DroneCAN/DSDL modules/DroneCAN/pydronecan \
+            modules/DroneCAN/dronecan_dsdlc modules/DroneCAN/libcanard
+          git -C modules/mavlink submodule update --init --recursive --depth 1
+          python -m pip install empy==3.3.4 pexpect future
+          ./waf configure --board sitl --no-submodule-update
+          ./waf copter --no-submodule-update
+      - run: python -m pip install -e ".[sitl]"
+      - run: python -m pvmission plan examples/northumberland.yaml --date 2026-06-21 --start 13:00 --out mission
+      - name: Fly sortie 1 in a crosswind
+        run: python sitl/fly_sitl.py --ardupilot ardupilot --mission mission --speedup 5 --wind 6 --wind-dir 0 --turbulence 1
+      - name: Compare with the plan
+        run: |
+          python - <<'PY'
+          import json
+          s = json.load(open("mission/sitl_wind6_from0.json"))
+          print(json.dumps(s, indent=2))
+          assert s["waypoints_visited"] == s["waypoints"], "missed a waypoint"
+          assert s["camera_triggers"] == s["planned_images"], "image count differs"
+          assert s["modules_with_centred_image_pct"] == 100.0, "a module has no centred image"
+          assert abs(s["flight_minutes_sitl"] / s["flight_minutes_planned"] - 1) < 0.05, "flight time off by >5%"
+          assert s["cross_track_m_p95"] < 0.5 and s["heading_error_deg_p95"] < 5
+          PY
