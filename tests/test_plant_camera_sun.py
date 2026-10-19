@@ -102,3 +102,35 @@ def test_forecast_payload_matches_clear_sky_on_a_clear_day(cfg):
     ref = cs.poa.reindex(noon.index)
     assert np.abs(noon.poa - ref).max() < 40  # W/m2, only hourly-interpolation error
     assert (fc.wind_kmh == 12).all()
+
+
+def test_landscape_tables_put_the_long_side_along_the_row():
+    p = Plant.regular(
+        "t", 23.0, 72.6, rows=2, row_length=110, modules_across=4, orientation="landscape"
+    )
+    r = p.rows[0]
+    assert r.modules_along == int(110 // 2.278) and r.modules_across == 4
+    assert r.length / r.modules_along == pytest.approx(2.278)
+    assert r.width / r.modules_across == pytest.approx(1.134)
+    with pytest.raises(ValueError):
+        Plant.regular("t", 23.0, 72.6, orientation="sideways")
+
+
+@pytest.mark.parametrize(
+    "site,date",
+    [("seville", "2026-03-20"), ("gujarat", "2026-12-15"), ("queensland", "2026-12-21")],
+)
+def test_example_sites_plan_at_midday(site, date):
+    """The extra example sites, including landscape tables and a north-facing plant in the
+    southern hemisphere, give valid plans with the glare margin kept."""
+    from pathlib import Path
+
+    from pvmission.config import load
+    from pvmission.planner import plan
+
+    cfg = load(Path(__file__).resolve().parents[1] / "examples" / f"{site}.yaml")
+    m = plan(cfg["plant"], date, cfg["camera"], cfg["req"], cfg["drone"], start="12:30")
+    assert m.feasible
+    assert min(ln.config.min_glare_deg for ln in m.lines) >= cfg["req"].min_glare_deg
+    if site == "queensland":  # modules face north: the front row is the northernmost
+        assert cfg["plant"].rows[0].center[1] > cfg["plant"].rows[-1].center[1]

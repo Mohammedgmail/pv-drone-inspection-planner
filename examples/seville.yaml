@@ -1,0 +1,34 @@
+# Example site: fixed-tilt plant (synthetic layout) near Seville, Spain: lower latitude, closer rows.
+site:
+  name: Example plant, Seville
+  latitude: 37.39
+  longitude: -5.98
+  altitude: 10          # ground, m above sea level
+  timezone: Europe/Madrid
+layout:
+  rows: 16
+  row_length: 100       # m
+  row_pitch: 6.0        # m, row to row
+  tilt: 25              # deg
+  azimuth: 180          # deg, modules face south
+  modules_across: 2     # in portrait
+  module_length: 2.278  # m
+  module_width: 1.134   # m
+  lower_edge_height: 0.8
+  module_power_w: 550
+camera: h20t            # DJI Zenmuse H20T thermal camera
+drone:
+  max_speed: 5.0        # m/s; motion blur usually limits it further
+  transit_speed: 8.0
+  usable_minutes: 25    # per battery, before the 20% reserve
+  reserve: 0.2
+  swap_minutes: 5
+requirements:
+  min_poa: 600          # W/m2 on the module plane (IEC TS 62446-3)
+  max_wind_kmh: 28      # (IEC TS 62446-3)
+  max_gsd_m: 0.03       # 3 cm/px on the module (IEC TS 62446-3)
+  view_angle_deg: [5, 60]
+  min_glare_deg: 15     # keep the sun's reflection this far from the line of sight
+  forward_overlap: 0.7
+  max_blur_px: 1.0
+# home: [east, north]   # take-off point in m from the plant centre (default: south-west corner)

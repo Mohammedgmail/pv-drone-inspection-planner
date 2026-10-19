@@ -11,7 +11,8 @@ layout:
   row_pitch: 7.0        # m, row to row
   tilt: 30              # deg
   azimuth: 180          # deg, modules face south
-  modules_across: 2     # in portrait
+  modules_across: 2     # modules up the slope
+  orientation: portrait # long side up the slope (2P); "landscape" for 4L-style tables
   module_length: 2.278  # m
   module_width: 1.134   # m
   lower_edge_height: 0.8

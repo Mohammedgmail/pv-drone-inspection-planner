@@ -130,10 +130,22 @@ class Plant:
         module_width: float = 1.134,
         lower_edge_height: float = 0.8,
         module_power_w: float = 0.0,
+        orientation: str = "portrait",
     ) -> Plant:
-        """Parallel rows of identical tables in portrait, centred on the reference point."""
-        width = modules_across * module_length  # portrait: long side up the slope
-        modules_along = int(row_length // module_width)
+        """Parallel rows of identical tables, centred on the reference point.
+
+        ``orientation`` is "portrait" (long side of the module up the slope, e.g. 2P tables)
+        or "landscape" (long side along the row, e.g. 4L tables).
+        """
+        if orientation not in ("portrait", "landscape"):
+            raise ValueError(f"orientation must be portrait or landscape, not {orientation!r}")
+        up, along = (
+            (module_length, module_width)
+            if orientation == "portrait"
+            else (module_width, module_length)
+        )
+        width = modules_across * up
+        modules_along = int(row_length // along)
         z = lower_edge_height + width / 2 * np.sin(np.radians(tilt))
         facing = direction(azimuth)
         out = []
@@ -144,7 +156,7 @@ class Plant:
                 Row(
                     i,
                     center,
-                    modules_along * module_width,
+                    modules_along * along,
                     width,
                     tilt,
                     azimuth,

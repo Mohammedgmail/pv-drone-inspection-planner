@@ -156,7 +156,13 @@ python -m pvmission plan examples/northumberland.yaml --forecast --out mission  
 | `recommended.parm` | `WP_YAW_BEHAVIOR 0`, needed so ArduPilot keeps the heading on each pass |
 
 To plan your own site, copy `examples/northumberland.yaml` and change the location, layout,
-take-off point, drone and requirements.
+take-off point, drone and requirements. Three more example sites show other layouts:
+
+| Site | Layout | Notes |
+|---|---|---|
+| [`seville.yaml`](examples/seville.yaml) | 2P portrait, 25° tilt, 6 m row pitch | Lower latitude, closer rows |
+| [`gujarat.yaml`](examples/gujarat.yaml) | 4L landscape, 20° tilt | `orientation: landscape` |
+| [`queensland.yaml`](examples/queensland.yaml) | 2P portrait, facing north | Southern hemisphere (`azimuth: 0`) |
 
 To fly a plan in SITL yourself, you need Linux or WSL and an ArduPilot checkout with
 `./waf configure --board sitl && ./waf copter`. The steps in
@@ -184,6 +190,14 @@ python sitl/fly_sitl.py --ardupilot ~/ardupilot --mission mission --wind 6 --win
 - **Line ends.** Each pass extends half an image spacing past the rows, plus ArduCopter's 2 m
   waypoint radius. Triggering stops when the end waypoint counts as reached, and this margin is
   why the autopilot's image count matches the plan to within one image per pass.
+
+## Changes in v0.1.2
+
+- **Landscape modules.** `orientation: landscape` in the plant section lays the modules with
+  their long side along the row (for example 4L tables). Portrait stays the default.
+- **Three more example sites** (Seville, Gujarat, Queensland, table above). The defect mapper
+  plans all three with this repo and maps them in its multi-site experiment; Queensland checks
+  north-facing rows in the southern hemisphere.
 
 ## Changes in v0.1.1: a bug found by the defect mapper
 
